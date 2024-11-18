@@ -4,7 +4,8 @@ from urllib.parse import urlparse
 from app.forms import LoginForm, RegistrationForm, QuestionForm
 from app.models import User, Questions
 from app import db
-
+import requests
+import random
 
 @app.before_request
 def before_request():
@@ -52,24 +53,50 @@ def register():
         return redirect(url_for('home'))
     return render_template('register.html', title='Register', form=form)
 
-
-
 @app.route('/question/<int:id>', methods=['GET', 'POST'])
 def question(id):
     form = QuestionForm()
-    q = Questions.query.filter_by(q_id=id).first()
-    if not q:
+
+    # Configuração da chamada à Open Trivia DB
+    params = {
+        'amount': 1,           # Número de perguntas
+        'type': 'multiple'     # Tipo: múltipla escolha
+    }
+    response = requests.get('https://opentdb.com/api.php', params=params, verify=False)
+
+    if response.status_code == 200:
+        data = response.json()
+        if data['response_code'] == 0:
+            # Processa os dados da pergunta
+            question_data = data['results'][0]
+            question = question_data['question']
+            correct_answer = question_data['correct_answer']
+            incorrect_answers = question_data['incorrect_answers']
+            all_answers = incorrect_answers + [correct_answer]
+            random.shuffle(all_answers)  # Embaralha as opções
+        else:
+            return redirect(url_for('score'))
+    else:
         return redirect(url_for('score'))
-    if not g.user:
-        return redirect(url_for('login'))
+
+    # Verifica envio do formulário
     if request.method == 'POST':
         option = request.form['options']
-        if option == q.ans:
+        if option == correct_answer:  # Compara com a resposta correta
             session['marks'] += 10
-        return redirect(url_for('question', id=(id+1)))
-    form.options.choices = [(q.a, q.a), (q.b, q.b), (q.c, q.c), (q.d, q.d)]
-    return render_template('question.html', form=form, q=q, title='Question {}'.format(id))
+        return redirect(url_for('question', id=(id + 1)))
 
+    # Configura as opções no formulário
+    form.options.choices = [(answer, answer) for answer in all_answers]
+
+    # Renderiza o template com os dados da pergunta
+    return render_template(
+        'question.html',
+        form=form,
+        question=question,
+        id=id,
+        title=f'Question {id}'
+    )
 
 @app.route('/score')
 def score():

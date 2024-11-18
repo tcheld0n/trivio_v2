@@ -2,6 +2,8 @@ import os
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
+API_QUESTIONS_URL="https://opentdb.com/api.php?amount=10"
+
 class Config(object):
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
