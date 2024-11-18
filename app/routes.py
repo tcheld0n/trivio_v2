@@ -57,39 +57,46 @@ def register():
 def question(id):
     form = QuestionForm()
 
-    # Configuração da chamada à Open Trivia DB
-    params = {
-        'amount': 1,           # Número de perguntas
-        'type': 'multiple'     # Tipo: múltipla escolha
-    }
-    response = requests.get('https://opentdb.com/api.php', params=params, verify=False)
-
-    if response.status_code == 200:
-        data = response.json()
-        if data['response_code'] == 0:
-            # Processa os dados da pergunta
-            question_data = data['results'][0]
-            question = question_data['question']
-            correct_answer = question_data['correct_answer']
-            incorrect_answers = question_data['incorrect_answers']
-            all_answers = incorrect_answers + [correct_answer]
-            random.shuffle(all_answers)  # Embaralha as opções
+    # Inicializa perguntas e pontuação na sessão
+    if 'questions' not in session:
+        # Chamada à Open Trivia DB para obter 10 perguntas
+        response = requests.get('https://opentdb.com/api.php?amount=10', verify=False)
+        if response.status_code == 200:
+            data = response.json()
+            if data['response_code'] == 0:
+                session['questions'] = data['results']  # Armazena as perguntas na sessão
+                session['marks'] = 0  # Inicializa a pontuação
+                session['current_question'] = 0  # Índice da pergunta atual
+            else:
+                return redirect(url_for('score'))
         else:
             return redirect(url_for('score'))
-    else:
+
+    # Verifica se todas as perguntas foram respondidas
+    if session['current_question'] >= len(session['questions']):
         return redirect(url_for('score'))
 
-    # Verifica envio do formulário
+    # Obtém a pergunta atual da sessão
+    current_question_index = session['current_question']
+    question_data = session['questions'][current_question_index]
+    question = question_data['question']
+    correct_answer = question_data['correct_answer']
+    incorrect_answers = question_data['incorrect_answers']
+    all_answers = incorrect_answers + [correct_answer]
+    random.shuffle(all_answers)  # Embaralha as opções
+
+    # Lida com envio do formulário
     if request.method == 'POST':
         option = request.form['options']
-        if option == correct_answer:  # Compara com a resposta correta
-            session['marks'] += 10
+        if option == correct_answer:  # Verifica se a resposta está correta
+            session['marks'] += 10  # Incrementa a pontuação
+        session['current_question'] += 1  # Incrementa o índice para a próxima pergunta
         return redirect(url_for('question', id=(id + 1)))
 
     # Configura as opções no formulário
     form.options.choices = [(answer, answer) for answer in all_answers]
 
-    # Renderiza o template com os dados da pergunta
+    # Renderiza o template com a pergunta atual
     return render_template(
         'question.html',
         form=form,
