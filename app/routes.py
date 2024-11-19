@@ -117,3 +117,11 @@ def logout():
     session.pop('user_id', None)
     session.pop('marks', None)
     return redirect(url_for('home'))
+
+@app.route('/retake-test')
+def retake_test():
+    # Limpa a sessão para reiniciar o teste
+    session.pop('questions', None)
+    session.pop('current_question', None)
+    session['marks'] = 0  # Reseta a pontuação
+    return redirect(url_for('question', id=1))  # Redireciona para o início do teste
