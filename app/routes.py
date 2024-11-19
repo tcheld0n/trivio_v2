@@ -25,14 +25,11 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user is None or not user.check_password(form.password.data):
+            flash('Usuário ou senha inválidos', 'danger')
             return redirect(url_for('login'))
+        session.clear()  # Reinicia a sessão
         session['user_id'] = user.id
         session['marks'] = 0
-        from urllib.parse import urlparse
-        next_page = request.args.get('next')
-        if next_page and urlparse(next_page).netloc == '':
-            next_page = url_for('home')
-        return redirect(next_page)
         return redirect(url_for('home'))
     if g.user:
         return redirect(url_for('home'))
@@ -42,10 +39,11 @@ def login():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.password.data)
+        user = User(username=form.username.data, email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
+        session.clear()  # Reinicia a sessão
         session['user_id'] = user.id
         session['marks'] = 0
         return redirect(url_for('home'))
@@ -57,16 +55,16 @@ def register():
 def question(id):
     form = QuestionForm()
 
-    # Inicializa perguntas e pontuação na sessão
-    if 'questions' not in session:
-        # Chamada à Open Trivia DB para obter 10 perguntas
+    # Verifica se a sessão foi inicializada corretamente
+    if 'questions' not in session or 'current_question' not in session:
+        # Faz a chamada para buscar as perguntas
         response = requests.get('https://opentdb.com/api.php?amount=10', verify=False)
         if response.status_code == 200:
             data = response.json()
             if data['response_code'] == 0:
-                session['questions'] = data['results']  # Armazena as perguntas na sessão
-                session['marks'] = 0  # Inicializa a pontuação
-                session['current_question'] = 0  # Índice da pergunta atual
+                session['questions'] = data['results']  # Armazena perguntas na sessão
+                session['current_question'] = 0        # Inicializa o índice
+                session['marks'] = 0                  # Reseta a pontuação
             else:
                 return redirect(url_for('score'))
         else:
@@ -76,9 +74,8 @@ def question(id):
     if session['current_question'] >= len(session['questions']):
         return redirect(url_for('score'))
 
-    # Obtém a pergunta atual da sessão
-    current_question_index = session['current_question']
-    question_data = session['questions'][current_question_index]
+    # Obtem a pergunta atual
+    question_data = session['questions'][session['current_question']]
     question = question_data['question']
     correct_answer = question_data['correct_answer']
     incorrect_answers = question_data['incorrect_answers']
@@ -88,15 +85,15 @@ def question(id):
     # Lida com envio do formulário
     if request.method == 'POST':
         option = request.form['options']
-        if option == correct_answer:  # Verifica se a resposta está correta
-            session['marks'] += 10  # Incrementa a pontuação
-        session['current_question'] += 1  # Incrementa o índice para a próxima pergunta
+        if option == correct_answer:  # Valida a resposta
+            session['marks'] += 10
+        session['current_question'] += 1  # Passa para a próxima pergunta
         return redirect(url_for('question', id=(id + 1)))
 
     # Configura as opções no formulário
     form.options.choices = [(answer, answer) for answer in all_answers]
 
-    # Renderiza o template com a pergunta atual
+    # Renderiza o template
     return render_template(
         'question.html',
         form=form,
